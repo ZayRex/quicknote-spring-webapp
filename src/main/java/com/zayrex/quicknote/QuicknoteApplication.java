@@ -66,6 +66,8 @@ class QuicknoteController {
 
 	@Autowired
 	private NotesRepository notesRepository;
+	@Autowired
+	private QuicknoteProperties properties;
 	private Parser parser = Parser.builder().build();
 	private HtmlRenderer renderer = HtmlRenderer.builder().build();
 
@@ -82,7 +84,6 @@ class QuicknoteController {
 	}
 	private void saveNote(String textContent, Model model) {
 		if (textContent != null && !textContent.trim().isEmpty()) {
-			notesRepository.save(new Note(null, textContent.trim()));
 			Node document = parser.parse(textContent.trim());
 			String html = renderer.render(document);
 			notesRepository.save(new Note(null, html));
@@ -95,15 +96,60 @@ class QuicknoteController {
 							@RequestParam String textContent,
 							@RequestParam(required = false) String save,
 							@RequestParam(required = false) String upload,
-							Model model) throws IOException {
+							Model model) throws Exception {
 
 		if (save != null && save.equals("Save")) {
 			saveNote(textContent, model);
 			getAllNotes(model);
 			return "redirect:/";
 		}
-		// After save fetch all notes again
+
+		if (upload != null && upload.equals("Upload")) {
+			if (file != null && file.getOriginalFilename() != null && !file.getOriginalFilename().isEmpty()) {
+				uploadImage(file, textContent, model);
+			}
+			getAllNotes(model);
+			return "index";
+		}
 		return "index";
+	}
+	private void uploadImage(MultipartFile file, String textContent, Model model) throws Exception {
+		File uploadsDir = new File(properties.getUploadDir());
+		if (!uploadsDir.exists()) {
+			uploadsDir.mkdir();
+		}
+		String fileId = UUID.randomUUID().toString() + "."
+				+ file.getOriginalFilename().split("\\.")[1];
+		file.transferTo(new File(properties.getUploadDir() + fileId));
+		model.addAttribute("textContent", textContent + " ![](/uploads/" + fileId + ")");
+	}
+
+}
+@ConfigurationProperties(prefix = "quicknote")
+class QuicknoteProperties {
+	@Value("${uploadDir:/tmp/uploads/}")
+	private String uploadDir;
+
+	public String getUploadDir() {
+		return uploadDir;
+	}
+}
+
+@Configuration
+@EnableConfigurationProperties(QuicknoteProperties.class)
+class QuicknoteConfig implements WebMvcConfigurer {
+
+	@Autowired
+	private QuicknoteProperties properties;
+
+	@Override
+	public void addResourceHandlers(ResourceHandlerRegistry registry) {
+		registry
+				.addResourceHandler("/uploads/**")
+				.addResourceLocations("file:" + properties.getUploadDir())
+				.setCachePeriod(3600)
+				.resourceChain(true)
+				.addResolver(new PathResourceResolver());
 	}
 
 }
