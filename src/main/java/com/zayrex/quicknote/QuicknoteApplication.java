@@ -66,6 +66,8 @@ class QuicknoteController {
 
 	@Autowired
 	private NotesRepository notesRepository;
+	private Parser parser = Parser.builder().build();
+	private HtmlRenderer renderer = HtmlRenderer.builder().build();
 
 	@GetMapping("/")
 	public String index(Model model) {
@@ -81,6 +83,9 @@ class QuicknoteController {
 	private void saveNote(String textContent, Model model) {
 		if (textContent != null && !textContent.trim().isEmpty()) {
 			notesRepository.save(new Note(null, textContent.trim()));
+			Node document = parser.parse(textContent.trim());
+			String html = renderer.render(document);
+			notesRepository.save(new Note(null, html));
 			//clear text field
 			model.addAttribute("textContent", "");
 		}
